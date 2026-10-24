@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mercado Libre - Credenciais</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="card">
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="15" r="4"></circle>
+        <path d="M10.8 12.2 20 3"></path>
+        <path d="m16 7 3 3"></path>
+        <path d="m13.5 9.5 2 2"></path>
+      </svg>
+    </div>
+
+    <h1>Credenciais da aplicação</h1>
+    <p class="subtitle">Informe os dados para gerar o token de acesso.</p>
+
+    <form id="setup-form" method="post" action="/setup" autocomplete="off">
+      <div class="field">
+        <label for="app_id">App ID</label>
+        <input id="app_id" name="app_id" type="text" inputmode="numeric"
+               placeholder="1234567890123456" required>
+      </div>
+
+      <div class="field">
+        <label for="client_secret">Senha (Client Secret)</label>
+        <input id="client_secret" name="client_secret" type="password"
+               placeholder="••••••••••••••••" required>
+      </div>
+
+      <div class="field">
+        <label for="domain">Domínio</label>
+        <input id="domain" name="domain" type="text"
+               placeholder="meu-dominio.ngrok-free.dev"
+               pattern="[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
+               title="Somente o domínio, sem https:// e sem barra no final"
+               required>
+        <p class="hint">Sem https:// e sem barra no final.</p>
+      </div>
+
+      <div class="field" id="ngrok-field" hidden>
+        <label for="ngrok_token">ngrok Authtoken</label>
+        <input id="ngrok_token" name="ngrok_token" type="password"
+               placeholder="Cole o authtoken do ngrok">
+        <p class="hint" id="ngrok-hint">
+          O ngrok não está autenticado neste computador. Copie o token em
+          dashboard.ngrok.com (Your Authtoken). Ele é salvo na configuração
+          do próprio ngrok.
+        </p>
+        <p class="hint" id="ngrok-retry" hidden>
+          O ngrok recusou esse token. Confira se copiou o token inteiro.
+        </p>
+      </div>
+
+      <button type="submit">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="label-idle">Gerar token</span>
+        <span class="label-loading">Aguarde...</span>
+      </button>
+
+      <p class="status" role="status">
+        Iniciando o túnel e abrindo o Mercado Livre. Isso pode levar alguns segundos.
+      </p>
+    </form>
+
+    <p class="footer">Os dados são salvos apenas no seu computador.</p>
+  </main>
+
+  <script>
+    const form = document.getElementById("setup-form");
+    const button = form.querySelector("button[type=submit]");
+    const params = new URLSearchParams(location.search);
+
+    // The server sends the browser back here when ngrok needs its authtoken.
+    if (params.get("need") === "ngrok_token") {
+      const token = document.getElementById("ngrok_token");
+      document.getElementById("ngrok-field").hidden = false;
+      document.getElementById("ngrok-retry").hidden = params.get("retry") !== "1";
+      token.required = true;
+      token.focus();
+    }
+
+    // Restore the non-secret fields. The Client Secret must be typed again.
+    for (const name of ["app_id", "domain"]) {
+      const value = params.get(name);
+      if (value) document.getElementById(name).value = value;
+    }
+
+    // Runs only after the browser's own validation passes.
+    form.addEventListener("submit", () => {
+      form.classList.add("is-loading");
+      form.setAttribute("aria-busy", "true");
+      button.disabled = true;
+    });
+
+    // Reset the form if the page is restored via the back button.
+    window.addEventListener("pageshow", () => {
+      form.classList.remove("is-loading");
+      form.removeAttribute("aria-busy");
+      button.disabled = false;
+    });
+  </script>
+</body>
+</html>
