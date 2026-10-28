@@ -1,12 +1,12 @@
 from .server import CredentialsSetup
-
-
+ 
+ 
 def main() -> None:
     tokens = CredentialsSetup().run()
-    print("Token gerado e credenciais salvas.")
-    print(f"Válido por {tokens.get('expires_in')} segundos.")
-
-
+    print("Token generated and credentials saved.")
+    print(f"Valid for {tokens.get('expires_in')} seconds.")
+ 
+ 
 if __name__ == "__main__":
     main()
     

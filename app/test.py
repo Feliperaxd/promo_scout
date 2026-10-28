@@ -1,50 +1,55 @@
+"""Manual script to test the Mercado Libre integration."""
 
+import os
 import sys
 from pathlib import Path
+from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from dotenv import load_dotenv
 
-from app_name.integrations.mercado_libre.source import MercadoLibreSource
-from app_name.integrations.mercado_libre.http import HttpClient
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE_DIR / "src"))
 
-env = {
-    "ML_APP_ID": "...",
-    "ML_CLIENT_SECRET": "...",
-}
-
-client = HttpClient(
-    tokens_path=Path("data/tokens/mercado_libre.json"),
-    env=env,
+from app_name.core.errors import SourceError  # noqa: E402
+from app_name.core.http_client import HttpClient  # noqa: E402
+from app_name.integrations.mercado_libre.auth import MercadoLibreAuth  # noqa: E402
+from app_name.integrations.mercado_libre.source import (  # noqa: E402
+    ML_BASE_URL,
+    MercadoLibreSource,
 )
 
-source = MercadoLibreSource(client)
+load_dotenv(BASE_DIR / "config" / ".env.mercado_libre")
+TOKENS_PATH = BASE_DIR / "data" / "tokens" / "mercado_libre.json"
 
-# 1. Busca o produto pelo código de barras
-products = source.find_by_barcode("885911913676")
-
-if not products:
-    print("Nenhum produto encontrado para esse código de barras.")
-    raise SystemExit
-
-# 2. Consulta os detalhes do primeiro produto
-product = products[0]
-product_id = product["id"]
-
-details = client.get(f"/products/{product_id}")
-
-print("Produto:", details.get("name"))
-
-# 3. Exibe a oferta vencedora, se existir
-winner = details.get("buy_box_winner")
-
-if winner:
-    print("-" * 50)
-    print("ID do anúncio:", winner.get("item_id"))
-    print("Preço: R$", winner.get("price"))
-    print("ID do vendedor:", winner.get("seller_id"))
-else:
-    print("O catálogo não retornou uma oferta vencedora.")
+BARCODE = "885911457842"  # replace with the barcode you want to test
 
 
-#API não tava retornando o q eu quero, gpt não ta ajudando
-perguntar para o claude como eu poderia fazer aqui, e no source, usando o ports tbm e models
+def build_client() -> HttpClient:
+    auth = MercadoLibreAuth(
+        TOKENS_PATH,
+        app_id=os.environ["ML_APP_ID"],
+        client_secret=os.environ["ML_CLIENT_SECRET"],
+    )
+    return HttpClient(ML_BASE_URL, auth=auth)
+
+
+def test_barcode(client: HttpClient, barcode: str) -> None:
+    """Search the listings for a barcode and print each one."""
+    listings = MercadoLibreSource(client).search_by_barcode(barcode)
+
+    print("listings found:", len(listings))
+    for listing in listings:
+        print(listing)
+
+
+def main() -> None:
+    client = build_client()
+
+    try:
+        test_barcode(client, BARCODE)
+    except SourceError as error:
+        print("ERROR:", error)
+
+
+if __name__ == "__main__":
+    main()

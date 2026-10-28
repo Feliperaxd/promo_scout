@@ -2,7 +2,12 @@ from .base import AppError
 
 
 class SourceError(AppError):
-    """An integration (API, scraper...) failed to return what was asked."""
+    """An integration (API, scraper...) failed to return what was asked.
+
+    Attributes:
+        source: name of the integration that failed, e.g. "mercado_libre".
+        status_code: HTTP status code of the failed response, if there is one.
+    """
 
     def __init__(
         self,
@@ -26,7 +31,11 @@ class AuthenticationError(SourceError):
 
 
 class RateLimitError(SourceError):
-    """The source asked us to slow down."""
+    """The source asked us to slow down.
+
+    Attributes:
+        retry_after: seconds to wait before trying again, if the source said.
+    """
 
     def __init__(
         self,
@@ -37,4 +46,3 @@ class RateLimitError(SourceError):
     ) -> None:
         super().__init__(message, source=source, status_code=429)
         self.retry_after: float | None = retry_after
-        

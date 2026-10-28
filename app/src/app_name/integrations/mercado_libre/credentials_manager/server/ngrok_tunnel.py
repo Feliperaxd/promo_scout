@@ -1,13 +1,18 @@
 import json
 import subprocess
 import time
-import urllib.error
 import urllib.request
+from typing import Self
 
 AUTH_ERROR_HINTS = ("authtoken", "authentication failed")
 NGROK_API_URL = "http://127.0.0.1:4040/api/tunnels"
 STARTUP_TIMEOUT = 10.0
 POLL_INTERVAL = 0.3
+
+_AUTHTOKEN_TIMEOUT = 15
+_API_TIMEOUT = 1
+_STOP_TIMEOUT = 5
+_NOT_FOUND_MESSAGE = "ngrok not found. Install it and check your PATH."
 
 
 class NgrokTunnelError(RuntimeError):
@@ -19,18 +24,24 @@ class NgrokAuthError(NgrokTunnelError):
 
 
 def set_authtoken(token: str) -> None:
-    """Save the authtoken in ngrok's own configuration file."""
+    """Save the authtoken in ngrok's own configuration file.
+
+    Args:
+        token: the authtoken from the ngrok dashboard.
+
+    Raises:
+        NgrokAuthError: if ngrok rejects the token.
+        NgrokTunnelError: if ngrok is not installed or the command times out.
+    """
     try:
         result = subprocess.run(
             ["ngrok", "config", "add-authtoken", token],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=_AUTHTOKEN_TIMEOUT,
         )
     except FileNotFoundError as exc:
-        raise NgrokTunnelError(
-            "ngrok not found. Install it and check your PATH."
-        ) from exc
+        raise NgrokTunnelError(_NOT_FOUND_MESSAGE) from exc
     except subprocess.TimeoutExpired as exc:
         raise NgrokTunnelError("Timed out saving the authtoken.") from exc
 
@@ -40,7 +51,15 @@ def set_authtoken(token: str) -> None:
 
 
 class NgrokTunnel:
-    """Run an ngrok tunnel with a fixed domain via subprocess."""
+    """Run an ngrok tunnel with a fixed domain via subprocess.
+
+    Can be used as a context manager: the tunnel starts on enter and stops
+    on exit.
+
+    Attributes:
+        domain: fixed ngrok domain, without scheme, e.g. "my.ngrok-free.dev".
+        port: local port the tunnel forwards to.
+    """
 
     def __init__(self, domain: str, port: int = 8000) -> None:
         self.domain: str = domain
@@ -49,11 +68,17 @@ class NgrokTunnel:
 
     @property
     def public_url(self) -> str:
-        """Return the public HTTPS URL of the tunnel."""
+        """Public HTTPS URL of the tunnel."""
         return f"https://{self.domain}"
 
     def start(self) -> str:
-        """Start the tunnel and return its public URL once it is up."""
+        """Start the tunnel and return its public URL once it is up.
+
+        Raises:
+            NgrokAuthError: if the authtoken is missing or invalid.
+            NgrokTunnelError: if the tunnel is already running, ngrok is not
+                installed, or the tunnel does not come up in time.
+        """
         if self._process is not None:
             raise NgrokTunnelError("The tunnel is already running.")
 
@@ -72,9 +97,7 @@ class NgrokTunnel:
                 errors="replace",
             )
         except FileNotFoundError as exc:
-            raise NgrokTunnelError(
-                "ngrok not found. Install it and check your PATH."
-            ) from exc
+            raise NgrokTunnelError(_NOT_FOUND_MESSAGE) from exc
 
         try:
             self._wait_until_ready()
@@ -91,7 +114,7 @@ class NgrokTunnel:
 
         self._process.terminate()
         try:
-            self._process.wait(timeout=5)
+            self._process.wait(timeout=_STOP_TIMEOUT)
         except subprocess.TimeoutExpired:
             self._process.kill()
 
@@ -126,9 +149,9 @@ class NgrokTunnel:
     def _is_tunnel_up(self) -> bool:
         """Check ngrok's local API for an active tunnel on this domain."""
         try:
-            with urllib.request.urlopen(NGROK_API_URL, timeout=1) as response:
+            with urllib.request.urlopen(NGROK_API_URL, timeout=_API_TIMEOUT) as response:
                 data = json.load(response)
-        except (urllib.error.URLError, OSError, ValueError):
+        except (OSError, ValueError):  # URLError is an OSError
             return False
 
         return any(
@@ -136,10 +159,9 @@ class NgrokTunnel:
             for tunnel in data.get("tunnels", [])
         )
 
-    def __enter__(self) -> "NgrokTunnel":
+    def __enter__(self) -> Self:
         self.start()
         return self
 
     def __exit__(self, *exc_info: object) -> None:
         self.stop()
-        

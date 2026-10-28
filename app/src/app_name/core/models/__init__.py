@@ -1,3 +1,3 @@
-from .product import BaseProduct, MercadoLibreProduct
+from .product import BaseProduct, MercadoLibreListing
 
-__all__ = ["BaseProduct", "MercadoLibreProduct",]
+__all__ = ["BaseProduct", "MercadoLibreListing",]
